@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# lame-o-kernal v0.1 - naive kernal generator by enthusi (onslaught)
+# lame-o-kernal v0.2 - naive kernal generator by enthusi (onslaught)
 # (c) Martin 'enthusi' Wendt 05/2012
 # please credit any enhancements of this tool, enjoy :)
+#
+# Updated by Tim Locke 2015-05-21: Added support for starting in lower/upper mode instead of upper/graphics mode.
+#                                  Added upper case character support for startup messages.
+#                                  Added flag for whether to display amount of byte free in startup message.
+#                                  Adjusted the start of the startup message so the carriage return is optional.
 
 import sys
 import os
@@ -15,30 +20,38 @@ colors=["black","white","red","cyan","violet","green","blue","yellow",\
 # change the values below to your liking. grenn on black, however, is the way
 # to go!
 
-#border color:
+# border color:
 col_d020=colors.index('lightblue')
 
-#background color:
+# background color:
 col_d021=colors.index('blue')
 
-#font color
+# font color:
 col_d800=colors.index('lightblue')
 
-#speed for key-repeat (original kernal: 0x04):
+# upper/graphics or lower/upper mode (original kernal: 0x14):
+upper_lower_case=0x14 # 0x14 = upper/graphics, 0x16 = lower/upper
+
+# speed for key-repeat (original kernal: 0x04):
 key_repeat_speed=0x04
 
-#delay till key repeats (original kernal: 0x10):
+# delay till key repeats (original kernal: 0x10):
 key_repeat_delay=0x10
 
-#default drive for LOAD and OPEN@
+# default drive for LOAD and OPEN@
 default_drive=0x01
 
-#power on message (must have this length):
-message  = "    **** commodore 64 basic v2 ****      64k ram system"
+# power on message (must have length of 54):
+message  = chr(13)+"    **** commodore 64 basic v2 ****"+chr(13)+chr(13)+" 64k ram system "
+
+# power on message2 (must have length of 17):
 message2 = " basic bytes free"
 
+# display amount of bytes free (original kernal: True)
+show_bytes_free = True
+
 #---------------------------------------------------------------------------
-#only change stuff below this line if you know what you're doing.
+# only change stuff below this line if you know what you're doing.
 
 kernal_org=base64.b64decode("""
 hVYgD7ylYcmIkAMg1LogzLylBxhpgfDzOOkBSKIFtWm0YZVhlGnKEPWlVoVwIFO4ILS/qcSgvyBZ
@@ -188,7 +201,7 @@ qGCqrZYCKqiKaciNmQKYaQCNmgJg6uoIaCnvSEiKSJhIur0EASkQ8ANsFgNsFAMgGOWtEtDQ+60Z
 """)
 
 #----------------------------------------
-petscii=""" !"#$%&'()*+,-./0123456789:;<=>?@abcdefghijklmnopqrstuvwxyz[~]^¬"""
+petscii=""" !"#$%&'()*+,-./0123456789:;<=>?@abcdefghijklmnopqrstuvwxyz[~]^_ ABCDEFGHIJKLMNOPQRSTUVWXYZ"""
 #re-program code for shift/runstop
 no_chars_rs=0x0a #10 chars
 rs_command1=0xbf #at $e4bf
@@ -199,11 +212,12 @@ rs_command2=0xe4
 rs_command=[0x4c,0xcf,0x22,0x3a,0x2a,0x22,0x0d,0x52,0xd5,0x0d]
 
 #avoid the printing of blabla BASIC BYTES FREE
-no_free_byte=[0x4c,0x3d,0xe4]
+bytes_free=[0x4c,0x3d,0xe4]
 
 #offsets into kernal binary
 off_bgcol            =0xecd9-0xe000
 off_charcol          =0xe535-0xe000
+off_upper_lower_case =0xecd1-0xe000
 off_key_repeat_speed1=0xe53a-0xe000
 off_key_repeat_speed2=0xeb1d-0xe000
 off_key_repeat_delay =0xeaea-0xe000
@@ -212,9 +226,9 @@ off_default_open     =0xe228-0xe000
 off_no_chars_rs      =0xe5ef-0xe000
 off_rs_command_ptr   =0xe5f4-0xe000           
 off_rs_command       =0xe4c0-0xe000
-off_message          =0xe473-0xe000
+off_message          =0xe474-0xe000
 off_message2         =0xe460-0xe000
-off_no_free_byte     =0xe430-0xe000
+off_bytes_free       =0xe430-0xe000
 
 kernal=open('kernal.bin','wb')
 kernal.write(kernal_org)
@@ -224,6 +238,9 @@ kernal.write("%c" % col_d021)
 
 kernal.seek(off_charcol,0)
 kernal.write("%c" % col_d800)
+
+kernal.seek(off_upper_lower_case,0)
+kernal.write("%c" % upper_lower_case)
 
 kernal.seek(off_key_repeat_speed1,0)
 kernal.write("%c" % key_repeat_speed)
@@ -239,7 +256,6 @@ kernal.write("%c" % default_drive)
 kernal.seek(off_default_open,0)
 kernal.write("%c" % default_drive)
 
-
 kernal.seek(off_no_chars_rs,0)
 kernal.write("%c" % no_chars_rs)
 
@@ -252,23 +268,27 @@ for i in rs_command:
   kernal.write("%c" % i)
 
 kernal.seek(off_message,0)
-if len(message)>(0x4ab-0x473):
+if len(message)>(0x4ab-0x474):
   print 'message too long'
-kernal.write("%c" % 0x0d)  
+#kernal.write("%c" % 0x0d)  
 for i in message:
-  kernal.write("%c" % (petscii.index(i)+0x20))
+  if i != chr(13):
+    kernal.write("%c" % (petscii.index(i)+0x20))
+  else:
+    kernal.write("%c" % 0x0D)
 
 kernal.seek(off_message2,0)
 if len(message2)>(0x472-0x460):
   print 'message2 too long'
 for i in message2:
-  kernal.write("%c" % (petscii.index(i)+0x20))
+  if i != chr(13):
+    kernal.write("%c" % (petscii.index(i)+0x20))
+  else:
+    kernal.write("%c" % 0x0D)
 kernal.write("%c" % 0x0d) 
 kernal.write("%c" % 0x00)
 
-kernal.seek(off_no_free_byte,0)
-for i in no_free_byte:
-  kernal.write("%c" % i)
-
-
-
+if not show_bytes_free:
+  kernal.seek(off_bytes_free,0)
+  for i in bytes_free:
+    kernal.write("%c" % i)
